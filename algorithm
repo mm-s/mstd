@@ -1,0 +1,21 @@
+#ifndef _MSTD_ALGORITHM
+#define _MSTD_ALGORITHM
+namespace mstd {
+
+template<typename C, typename X>
+void filter(C& c, const X& x) {
+	typename C::iterator i=c.begin();
+	typename C::iterator w=i;
+	while(i!=c.end()) {
+		typename C::iterator j=i+1;
+		while(j!=c.end() && x(j,i)) ++j;
+		if (w!=i) *w=move(*i);
+		++w;
+		i=j;
+	}
+	c.erase(w,c.end());	
+}
+
+}
+#endif
+
