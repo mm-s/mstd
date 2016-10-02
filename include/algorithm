@@ -8,7 +8,7 @@ void filter(C& c, const X& x) {
 	typename C::iterator w=i;
 	while(i!=c.end()) {
 		typename C::iterator j=i+1;
-		while(j!=c.end() && x(i,j)) ++j;
+		while(j!=c.end() && x(*i,*j)) ++j;
 		if (w!=i) *w=move(*i);
 		++w;
 		i=j;
