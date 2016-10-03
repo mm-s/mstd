@@ -1,0 +1,22 @@
+#ifndef MSTD_ASSERT
+#define MSTD_ASSERT
+
+#include "likely.h"
+#include <stdlib.h>
+
+namespace mstd {
+
+/// Release build assertion
+/// 
+/// Use to assert in release builds, the argument does not vanish in release builds.
+/// qt 'connect' functions do not produce compilation errors even if the functions supplied didn't exist at all,
+/// the way to make sure is to assert the return value
+/// @param predicate that must be true otherwise th program is aborted.
+inline void assert(bool b) {
+    if(likely(b)) return;
+    abort();
+}
+
+}
+
+#endif
