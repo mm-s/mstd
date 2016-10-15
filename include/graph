@@ -22,6 +22,7 @@ struct edge;
 struct vertex {
 	vertex(int id_): id(id_) {
 	}
+	bool is_leaf() const { return e.empty(); }
 	vector<edge*> e;
 	int id;
 };
@@ -41,7 +42,7 @@ struct graph {
 	map<int,vertex*> V;
 	map<string,edge*> E;
 
-	graph(vector<string> al) {  //v1 v2
+	graph(const vector<string>& al) {  //v1 v2
 		for (auto& l:al) {
 			int v1=-1;
 			int v2=-1;
@@ -52,15 +53,40 @@ struct graph {
 		}
 	}
 
+	graph(const vector<pair<int,int>>& al) {  //v1 v2
+		for (auto& l:al) {
+			add(l.first,l.second);
+		}
+	}
+
 	graph(const graph&)=delete;
 	graph(graph&&)=delete;
 
-	void dot(ostream& os) const {
+	template<class P>
+	void dot(const P& pred, const function<bool(const vertex&)>& is_leaf, const function<bool(const vertex&)>& is_done, ostream& os) const {
 		os << "digraph {" << endl;
+		for (auto v: V) {
+			os << "task" << v.second->id << "[label=<" << v.second->id << ": " << pred(v.second->id) << ">";
+			if (is_done(*v.second)) {
+				os << ",color=green";
+			}
+			else if (is_leaf(*v.second)) {
+				os << ",color=red";
+			}
+			os << "];" << endl;
+		}
 		for (auto e: E) {
-			os << e.second->from->id << " -> " << e.second->to->id << endl;
+			os << "task" << e.second->to->id << " -> task" << e.second->from->id << ";" << endl;
 		}
 		os << "}" << endl;
+	}
+
+	void dot(ostream& os) const {
+		dot(
+		[](int i) -> string { return to_string(i); },
+		[](const vertex&v) -> bool { return v.is_leaf(); },
+		[](const vertex&) -> bool { return false; },
+		os);
 	}	
 
 	vertex* add(int iv) {
@@ -94,9 +120,10 @@ struct graph {
 			breath_first, depth_first
 		
 		};
-		virtual void start(const vertex&)=0;
-		virtual void visit(const edge&)=0;
-		virtual void finished()=0;
+		virtual void start(const vertex&){};
+		virtual void visit(const edge&){};
+		virtual void visit(const vertex&){};
+		virtual void finished(){};
 	};
 	void breath_first(int iv, visitor& visitor_) const {
 		auto v=V.find(iv);
@@ -106,6 +133,7 @@ struct graph {
 
 	void breath_first(const vertex& s, visitor& visitor_) const {
 		visitor_.start(s);
+		visitor_.visit(s);
 		unordered_set<edge*> visited;
 		queue<edge*> q;
 		for (auto e:s.e) {
@@ -118,6 +146,7 @@ struct graph {
 					q.push(ed);
 				}
 				visitor_.visit(*e);
+				visitor_.visit(*e->to);
 				visited.emplace(e);
 			}
 		}
@@ -132,6 +161,7 @@ struct graph {
 
 	void depth_first(const vertex& s, visitor& visitor_) const {
 		visitor_.start(s);
+		visitor_.visit(s);
 		unordered_set<edge*> visited;
 
 		stack<edge*> q;
@@ -145,6 +175,7 @@ struct graph {
 					q.push(ed);
 				}
 				visitor_.visit(*e);
+				visitor_.visit(*e->to);
 				visited.emplace(e);
 			}
 		}
@@ -166,11 +197,23 @@ struct best_path:graph::visitor {
 	const vertex* f{0};
 	const vertex* t{0};
 	struct result:vector<const vertex*> {
+		void dump(const std::function <string (const vertex&)>& _t, ostream& os) const {
+			for (auto i:*this) os << _t(*i) << endl;
+		}
 		void dump(ostream& os) const {
 			for (auto i:*this) os << i->id << endl;
 		}
+		void reverse() {
+			result r;
+			r.reserve(size());
+			for (auto i=rbegin(); i!=rend(); ++i) 
+				r.push_back(*i);
+			*this=r;
+		}
 	};
 	result r;
+	best_path(const graph&g_): g(g_) { //adjacency list + values
+	}
 	best_path(const graph&g_, const vector<string>& al_values): g(g_) { //adjacency list + values
 		for (auto& l:al_values) {
 			int v1=-1;
@@ -221,7 +264,13 @@ struct best_path:graph::visitor {
 	}
 
 	data& relax(const edge& e) {
-		auto& ed=values.find(&e)->second;
+		auto edi=values.find(&e);
+		if (edi==values.end()) {
+			values.emplace(&e,T());
+			edi=values.find(&e);
+		}
+		auto& ed=edi->second;
+
 		auto ivdf=vd.find(e.from);
 		if (ivdf==vd.end()) {
 			vd.emplace(e.from,data());
@@ -266,10 +315,10 @@ struct best_path:graph::visitor {
 		}		
 		//reverse it
 		r.reserve(rp.size()+1);
+		r.push_back(f);
 		for (auto i=rp.rbegin(); i!=rp.rend(); ++i) {
 			r.push_back(*i);
 		}
-		r.push_back(f);
 	}
 
 
@@ -289,8 +338,10 @@ struct data {
 /// scalar - most common best path optimization vector 
 template<typename T>
 struct scalar {
-	T value{0};
-	scalar(string& s) {
+	T value{1};
+	scalar() { }
+	scalar(const T&t): value(t) { }
+	scalar(const string& s) {
 		istringstream is(s);
 		is>>value;
 	}
