@@ -59,6 +59,7 @@ const edge* vertex::get_edge_to(int to) const {
 }
 
 struct basic_graph {
+	typedef pair<int,int> edid;
 	enum type {
 		directed, undirected
 	};
@@ -77,7 +78,7 @@ struct basic_graph {
 		}
 	}
 
-	basic_graph(const vector<pair<int,int>>& al, type t=directed): t(t) {  //v1 v2
+	basic_graph(const vector<edid>& al, type t=directed): t(t) {  //v1 v2
 		for (auto& l:al) {
 			add(l.first,l.second);
 		}
@@ -123,18 +124,17 @@ struct basic_graph {
 		return i->second;
 	}
 
-	pair<int,int> get_eid(int iv1, int iv2) const {
-		return pair<int,int>(iv1,iv2);
+	edid get_eid(int iv1, int iv2) const {
+		return move(make_pair(iv1,iv2));
 	}
-	pair<int,int> get_eid(const edge& e) const {
-		return pair<int,int>(e.from->id,e.to->id);
+	edid get_eid(const edge& e) const {
+		return move(make_pair(e.from->id,e.to->id));
 	}
-	pair<int,int> get_erid(const edge& e) const {
-		return pair<int,int>(e.to->id,e.from->id);
+	edid get_erid(const edge& e) const {
+		return move(make_pair(e.to->id,e.from->id));
 	}
 
-
-	edge* add(int iv1, int iv2) {
+	virtual edge* add(int iv1, int iv2) {
 		if (iv1<0 || iv2<0) return 0;
 		if (iv1==iv2) return 0;
 		auto v1=get_vertex(iv1);
@@ -246,6 +246,24 @@ struct basic_graph {
 	int vertexes_size() const { return V.size(); }
 	int edges_size() const { return t==directed?E.size():E.size()/2; }
 
+	bool cycle(const edge& start) const {
+		struct vis: visitor {
+			vis(const edge& start): start(start) {
+			}
+			virtual void visit(const edge& e) {
+				if (e.to->id==start.from->id) {
+					cycle=true;
+					finish=true;
+  				}
+			}
+			const edge& start;
+			bool cycle{false};
+		};
+		vis v(start);
+		depth_first(*start.from,v);
+		return v.cycle;
+	}
+
 
 	struct pairhash {
 	public:
@@ -261,7 +279,7 @@ struct basic_graph {
 	};
 
 	unordered_map<int,vertex*> V;
-	unordered_map<pair<int,int>,edge*, pairhash> E;
+	unordered_map<edid,edge*, pairhash> E;
 	type t;
 
 	
@@ -281,6 +299,10 @@ struct scalar {
 	}
 	bool operator < (const scalar& other) const {
 		return value < other.value;
+	}
+	scalar& operator += (const scalar& other) {
+		value+=other.value;
+		return *this;
 	}
 };
 
@@ -318,89 +340,131 @@ struct graph: basic_graph {
 	virtual ~graph() {
 	}
 
-	pair<int,int> get_edid(int iv1, int iv2) const {
+	edid get_edid(const edge& e) const {
+		return get_edid(e.from->id,e.to->id);
+	}
+
+	edid get_edid(int iv1, int iv2) const {
 		if (t==undirected && iv1>iv2) {
 			return get_edid(iv2,iv1);
 		}
-		return make_pair(iv1,iv2);
+		return move(make_pair(iv1,iv2));
+	}
+
+	virtual edge* add(int iv1, int iv2) {
+		base::add(iv1,iv2);
 	}
 
 	edge* add(int iv1, int iv2, const Edata& d) {
 		edge* e=base::add(iv1,iv2);
-		ed.emplace(e,d);
+		ed.emplace(get_edid(iv1,iv2),d);
 		return e;
 	}
 	edge* add(int iv1, int iv2, Edata&& d) {
 		edge* e=base::add(iv1,iv2);
-		ed.emplace(e,move(d));
+		ed.emplace(get_edid(iv1,iv2),move(d));
 		return e;
 	}
-	vector<const edge*> sort_edges_no_descendent() const {
-		vector<const edge*> v;
+	vector<edid> sort_edges_no_descendent() const { // O(E log E)
+		vector<edid> v;
 		v.reserve(ed.size());
 		for (auto& i:ed) {
 			v.push_back(i.first);
 		}
-		sort(v.begin(),v.end(),[&](const edge* e1,const edge* e2) -> bool {
+		sort(v.begin(),v.end(),[&](const edid& e1,const edid& e2) -> bool {
 			return ed.find(e1)->second < ed.find(e2)->second;
 		});
 		return move(v);
 	}
 
 	virtual void erase(edge* e) {
-		ed.erase(ed.find(e));
+		auto i=ed.find(get_edid(*e));
+		if (i!=ed.end()) ed.erase(i);
 		base::erase(e);
 	}
 
-	bool cycle(const edge& start) const {
-		struct vis: visitor {
-			vis(const edge& start): start(start) {
-			}
-			virtual void visit(const edge& e) {
-				if (e.to->id==start.from->id) {
-					cycle=true;
-					finish=true;
-  				}
-			}
-			const edge& start;
-			bool cycle{false};
-		};
-		vis v(start);
-		depth_first(*start.from,v);
-		return v.cycle;
+	graph mst_prim() const { // minimum_spanning_tree - greedy. 
+		//http://www.geeksforgeeks.org/greedy-algorithms-set-5-prims-minimum-spanning-tree-mst-2/
+
+		typedef multimap<Edata,const edge*> master_t;
+		typedef map<const vertex*,typename master_t::const_iterator> index_t;
+
+		master_t master;
+		index_t index;
+
+		graph g(t);
+		if (V.empty()) return move(g);
+
+		const vertex* v=V.cbegin()->second; //pick vertex with minimum key value
+
+		while(true) {
+
+			for (auto& e:v->e) {
+				if (g.V.find(e->to->id)!=g.V.end()) continue; // already added
+				auto i=index.find(e->to);
+				if (i==index.end()) {
+					auto j=master.emplace(get_edata(*e),e);
+					index.emplace(e->to,j);				
+				}
+				else {
+					master.erase(i->second);
+					auto j=master.emplace(get_edata(*e),e);
+					i->second=j;
+				}
+			}				
+			if (master.empty()) break;
+
+			const edge* e=master.cbegin()->second; //pick vertex with minimum key value
+			index.erase(e->to);
+			master.erase(master.begin());
+			v=e->to;
+
+			g.add(e->from->id,e->to->id,get_edata(*e));
+
+		} 
+
+		return move(g);
 	}
-	graph minimum_spanning_tree_kruskal() const {
+
+	graph mst_kruskal() const { // minimum_spanning_tree - greedy. 
 		//http://www.geeksforgeeks.org/greedy-algorithms-set-2-kruskals-minimum-spanning-tree-mst/
 		graph r(t);
-		vector<const edge*> edges=sort_edges_no_descendent();
-int i=0;
+		vector<edid> edges=sort_edges_no_descendent();
 		for (const auto& e: edges) {
-			edge* ne=r.add(e->from->id,e->to->id,ed.find(e)->second);
+			edge* ne=r.add(e.first,e.second);
 			if (r.cycle(*ne)) {
 				r.erase(ne);
 			}
 			else {
+				r.ed.emplace(e,get_edata(e)); //add the weight
 				if (r.edges_size()==vertexes_size()-1) break;
 			}
-	++i;
-	{
-	cout << "written dot file: graph.dot" << endl;
-	ostringstream os;
-	os << "graph" << i << ".dot" ;
-	ofstream f(os.str());
-	r.dot(f);
-	}
-
 		}
 		return move(r);
 	}
 	
-
-	const Edata& get_edata(const edge& e) const {
-		return ed.find(&e)->second;
+	Edata sum_data() const {
+		struct vis: visitor {
+			vis(const graph& g): g(g) {}
+			Edata d;
+			const graph& g;
+			virtual void visit(const edge& e) {
+				d+=g.get_edata(e);
+			}
+		};
+		vis v(*this);
+		depth_first(*V.cbegin()->second,v);
+		return v.d;
 	}
 
-	unordered_map<const edge*,Edata> ed;
+	const Edata& get_edata(const edge& e) const {
+		return ed.find(get_edid(e))->second;
+	}
+	const Edata& get_edata(const edid& e) const {
+		return ed.find(e)->second;
+	}
+
+	unordered_map<edid,Edata,pairhash> ed;
 };
 
 

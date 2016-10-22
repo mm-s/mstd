@@ -2,7 +2,7 @@
 #include <fstream>
 using namespace mstd;
 
-void kruskal_minimum_spanning_tree_demo() {
+void minimum_spanning_tree_demo() {
 
 	vector<string> al={
 	"0 1 4",
@@ -30,25 +30,43 @@ void kruskal_minimum_spanning_tree_demo() {
 
 	cout << g.vertexes_size() << " vertexes, " << g.edges_size() << " edges " << endl;
 
-	auto v=g.sort_edges_no_descendent();
-	cout << "Weight Src Dst" << endl;
-	for (auto& i:v) {
-		cout << g.get_edata(*i).value << " " << i->from->id << " " << i->to->id << endl;
-	}
-
-	auto mstk=g.minimum_spanning_tree_kruskal();
-
 	{
-	cout << "written dot file: graph_mst_kruskal.dot" << endl;
-	ofstream f("graph_mst_kruskal.dot");
-	mstk.dot(f);
-	}
+		cout << "Kruskal" << endl;
 
+		auto v=g.sort_edges_no_descendent();
+		cout << "Weight Src Dst" << endl;
+		for (auto& i:v) {
+			cout << g.get_edata(i).value << " " << i.first << " " << i.second << endl;
+		}
+
+		auto mst=g.mst_kruskal();
+
+		{
+		cout << "written dot file: graph_mst_kruskal.dot" << endl;
+		ofstream f("graph_mst_kruskal.dot");
+		mst.dot(f);
+		}
+
+		cout << "sum: " << g.sum_data().value << endl;
+
+	}
+	{
+		cout << "Prim" << endl;
+
+		auto mst=g.mst_prim();
+		{
+		cout << "written dot file: graph_mst_prim.dot" << endl;
+		ofstream f("graph_mst_prim.dot");
+		mst.dot(f);
+		}
+
+		cout << "sum: " << g.sum_data().value << endl;
+	}
 }
 
 
 int main() {
-	kruskal_minimum_spanning_tree_demo();
+	minimum_spanning_tree_demo();
 	return 0;
 
 	vector<string> al;
