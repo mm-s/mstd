@@ -39,7 +39,7 @@ struct vertex {
 
 struct edge {  //from, to
 	edge(vertex* f, const vertex* t): from(f), to(t) {
-		from->e.insert(this);
+		from->e.emplace(this);
 
 	}
 	~edge() {
@@ -89,7 +89,7 @@ struct basic_graph {
 	}
 
 	template<class P>
-	void dot(const P& pred, const function<bool(const vertex&)>& is_leaf, const function<bool(const vertex&)>& is_done, const function<string(const edge&)>& label_edge, bool invert, ostream& os) const {
+	void make_dot(const P& pred, const function<bool(const vertex&)>& is_leaf, const function<bool(const vertex&)>& is_done, const function<string(const edge&)>& label_edge, bool invert, ostream& os) const {
 		os << "digraph {" << endl;
 		os << "node [shape=oval,style=filled]" << endl;
 		if (t==undirected) {
@@ -144,7 +144,7 @@ struct basic_graph {
 	}
 
 	virtual void dot(ostream& os) const {
-		dot(
+		make_dot(
 		[](int i) -> string { return ""; },
 		[](const vertex&v) -> bool { return v.is_leaf(); },
 		[](const vertex&) -> bool { return false; },
@@ -310,6 +310,16 @@ struct basic_graph {
 	}
 
 
+	virtual void reverse() {
+		for (auto& v:V) {
+			v.second->e.clear();
+		}
+		for (auto& e:E) {
+			swap(e.second->from,const_cast<vertex*&>(e.second->to));
+			V.find(e.second->from->id)->second->e.emplace(e.second);
+		}
+	}
+
 	struct pairhash {
 	public:
 	  template <typename T, typename U>
@@ -322,6 +332,7 @@ struct basic_graph {
 		return lhs;
 	  }
 	};
+
 
 	unordered_map<int,vertex*> V;
 	unordered_map<edid,edge*, pairhash> E;
@@ -382,6 +393,8 @@ struct graph: basic_graph {
 
 	graph(type t=directed): base(t) {
 	}
+	graph(const vector<edid>& al, type t=directed): base(al,t) {  //v1 v2
+	}
 
 	graph(const vector<string>& al_values, type t=directed): base(t) {  //v1 v2
 		for (auto& l:al_values) {
@@ -405,7 +418,7 @@ struct graph: basic_graph {
 	}
 
 	virtual void dot(ostream& os) const {
-		base::dot(
+		base::make_dot(
 		[](int i) -> string { return ""; },
 		[](const vertex&v) -> bool { return v.is_leaf(); },
 		[](const vertex&) -> bool { return false; },
@@ -658,12 +671,26 @@ struct graph: basic_graph {
 		return move(pair<graph,vertex_data>(move(r),move(vdm)));
 */
 	}
-
+	Edata defaultEdata;
 	const Edata& get_edata(const edge& e) const {
-		return ed.find(get_edid(e))->second;
+		auto i=ed.find(get_edid(e));
+		if (i==ed.end()) return defaultEdata;
+		return i->second;
 	}
 	const Edata& get_edata(const edid& e) const {
-		return ed.find(e)->second;
+		auto i=ed.find(e);
+		if (i==ed.end()) return defaultEdata;
+		return i->second;
+	}
+
+	virtual void reverse() {
+		base::reverse();
+		if (t==undirected) return;
+		unordered_map<edid,Edata,pairhash> m;
+		for (auto& i:ed) {
+			m.emplace(edid(i.first.second,i.first.first),move(i.second));
+		}	
+		ed=m;
 	}
 
 	unordered_map<edid,Edata,pairhash> ed;
