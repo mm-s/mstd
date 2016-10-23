@@ -62,6 +62,38 @@ void minimum_spanning_tree_demo() {
 
 		cout << "sum: " << g.sum_data().value << endl;
 	}
+	{
+		cout << "Dijkstra Shortest Path Tree from 0" << endl;
+		auto spt=g.spt_dijkstra(0);
+		{
+		cout << "written dot file: graph_spt_dijkstra.dot" << endl;
+		ofstream f("graph_spt_dijkstra.dot");
+		spt.first.dot(f);
+		spt.second.dump(cout);
+		}
+
+		cout << "Dijkstra Shortest Path - from 0 to 6" << endl;
+		auto sp_to6=spt.second.get_sp(6);
+		{
+		cout << "written dot file: graph_spt_dijkstra_0to6.dot" << endl;
+		ofstream f("graph_spt_dijkstra_0to6.dot");
+		sp_to6.dot(f);
+		}
+		
+
+	}
+	{
+		cout << "Dijkstra Shortest Path Tree from 0 to 8" << endl;
+		auto spt=g.spt_dijkstra(0,8);
+		spt.second.dump(cout);
+		auto sp_to8=spt.second.get_sp(8);
+		{
+		cout << "written dot file: graph_spt_dijkstra_0to8.dot" << endl;
+		ofstream f("graph_spt_dijkstra_0to8.dot");
+		sp_to8.dot(f);
+		}
+
+	}
 }
 
 

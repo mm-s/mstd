@@ -89,10 +89,23 @@ struct basic_graph {
 	}
 
 	template<class P>
-	void dot(const P& pred, const function<bool(const vertex&)>& is_leaf, const function<bool(const vertex&)>& is_done, ostream& os) const {
+	void dot(const P& pred, const function<bool(const vertex&)>& is_leaf, const function<bool(const vertex&)>& is_done, const function<string(const edge&)>& label_edge, bool invert, ostream& os) const {
 		os << "digraph {" << endl;
+		os << "node [shape=oval,style=filled]" << endl;
+		if (t==undirected) {
+			os << "edge [arrowhead=none,arrowtail=none]" << endl;
+		}
+		else {
+			os << "edge [arrowhead=normal,arrowtail=none]" << endl;
+		}
+
 		for (auto v: V) {
-			os << "task" << v.second->id << "[label=<" << v.second->id << ": " << pred(v.second->id) << ">";
+			string label=pred(v.second->id);
+			os << "task" << v.second->id << "[label=<" << v.second->id;
+			if (!label.empty()) {
+				os << ": " << label ;
+			}
+			os << ">";
 			if (is_done(*v.second)) {
 				os << ",color=green";
 			}
@@ -101,17 +114,42 @@ struct basic_graph {
 			}
 			os << "];" << endl;
 		}
+		set<pair<int,int>> u;
 		for (auto e: E) {
-			os << "task" << e.second->to->id << " -> task" << e.second->from->id << ";" << endl;
+			if (t==undirected) {
+				edid f=e.first;
+				if (f.first>f.second) swap(f.first,f.second);
+				if (u.find(f)!=u.end()) {
+					continue;
+				}
+				u.emplace(f);
+			}
+			string label=label_edge(*e.second);
+			if (invert)
+				os << "task" << e.second->to->id << " -> task" << e.second->from->id;
+			else
+				os << "task" << e.second->from->id << " -> task" << e.second->to->id;
+			int n=0;
+			ostringstream ost;
+			ost << " [";
+			if (!label.empty()) {
+				ost << "label=<" << label << ">";
+				++n;
+			}
+			ost << "]";
+			if (n>0)  os << ost.str();
+			os << ";" << endl;
 		}
 		os << "}" << endl;
 	}
 
-	void dot(ostream& os) const {
+	virtual void dot(ostream& os) const {
 		dot(
-		[](int i) -> string { return to_string(i); },
+		[](int i) -> string { return ""; },
 		[](const vertex&v) -> bool { return v.is_leaf(); },
 		[](const vertex&) -> bool { return false; },
+		[](const edge&) -> string { return ""; },
+		false,
 		os);
 	}	
 
@@ -120,6 +158,13 @@ struct basic_graph {
 		if (i==V.end()) {
 			V.emplace(iv,new vertex(iv));
 			i=V.find(iv);
+		}
+		return i->second;
+	}
+	const vertex* get_vertex(int iv) const {
+		auto i=V.find(iv);
+		if (i==V.end()) {
+			return 0;
 		}
 		return i->second;
 	}
@@ -289,7 +334,7 @@ struct basic_graph {
 /// scalar - most common best path optimization vector 
 template<typename T>
 struct scalar {
-	T value{1};
+	T value{0};
 	scalar() { }
 	scalar(const T&t): value(t) { }
 	scalar(T&&t): value(move(t)) { }
@@ -304,12 +349,31 @@ struct scalar {
 		value+=other.value;
 		return *this;
 	}
+	scalar& operator -= (const scalar& other) {
+		value-=other.value;
+		return *this;
+	}
+	scalar operator + (const scalar& other) const {
+		scalar v(*this);
+		v+=other;
+		return move(v);
+	}
+	scalar operator - (const scalar& other) const {
+		scalar v(*this);
+		v-=other;
+		return move(v);
+	}
 };
 
 template<typename T>
 istream& operator >> (istream& is, scalar<T>& v) {
 	is >> v.value;
 	return is;
+}
+template<typename T>
+ostream& operator << (ostream& os, const scalar<T>& v) {
+	os << v.value;
+	return os;
 }
 
 template<typename Edata=scalar<int>>
@@ -339,6 +403,21 @@ struct graph: basic_graph {
 
 	virtual ~graph() {
 	}
+
+	virtual void dot(ostream& os) const {
+		base::dot(
+		[](int i) -> string { return ""; },
+		[](const vertex&v) -> bool { return v.is_leaf(); },
+		[](const vertex&) -> bool { return false; },
+		[&](const edge& e) -> string { 
+			ostringstream os;
+			os << ed.find(get_edid(e))->second;
+			return os.str();
+		},
+		false,
+		os);
+	}	
+
 
 	edid get_edid(const edge& e) const {
 		return get_edid(e.from->id,e.to->id);
@@ -455,6 +534,129 @@ struct graph: basic_graph {
 		vis v(*this);
 		depth_first(*V.cbegin()->second,v);
 		return v.d;
+	}
+
+
+	struct spt {
+		struct vd {
+			vd() {}
+			vd(vd&& other): src(other.src), cost(move(other.cost)) {}
+			vd(int src, const Edata&d): src(src), cost(d) { }
+			int src{-1};
+			Edata cost;
+		};
+		struct vertex_data: unordered_map<int, vd> {
+			typedef unordered_map<int, vd> base;
+			vertex_data(){}
+			vertex_data(vertex_data&&other): base(move(other)) {}
+			void dump(ostream& os) const {
+				os << "vertex_data" << endl;
+				for (auto& i:*this) {
+					os << " > " << i.first << " " << i.second.cost.value << endl;
+				}
+			}
+			graph get_sp(int to) const {
+				graph r;
+				auto i=this->find(to);
+				if (i==this->end()) return move(r);
+				int cur=to;
+				int prev=i->second.src;
+				while(prev!=-1) {
+					auto p=this->find(prev);
+					assert(p!=this->end());
+					r.add(prev,cur,i->second.cost-p->second.cost);
+					i=p;
+					cur=prev;
+					prev=i->second.src;
+				} 
+				return move(r);
+			}
+		};
+	};
+	pair<graph,typename spt::vertex_data> spt_Astar(const function<Edata(const vertex*)>& heur, int start, int end=-1) const { //shortest_path_tree
+		//http://www.geeksforgeeks.org/a-search-algorithm/
+
+		typename spt::vertex_data vdm;
+
+		auto cmp=[&vdm, &heur](const vertex* v1, const vertex* v2)-> bool {
+			return (vdm.find(v2->id)->second.cost+heur(v2)) < (vdm.find(v1->id)->second.cost+heur(v1));
+		}; 
+		priority_queue<const vertex*,vector<const vertex*>, decltype(cmp)> q(cmp);
+
+		const vertex* v=get_vertex(start);
+		vdm.emplace(v->id,typename spt::vd());
+		q.emplace(v);
+		while(!q.empty()) {
+			const vertex* v=q.top(); q.pop();
+			if (v->id==end) break;
+			const typename spt::vd& w0=vdm.find(v->id)->second;
+
+			for (auto& e:v->e) {
+				auto i=vdm.find(e->to->id);
+				if (i==vdm.end()) {
+					i=vdm.emplace(e->to->id,typename spt::vd(e->from->id,w0.cost+get_edata(*e))).first;
+					q.emplace(e->to);
+					continue;
+				}
+				auto cost=w0.cost+get_edata(*e);
+				if (cost<i->second.cost)  {
+					i->second.cost=cost;
+					i->second.src=v->id;
+					q.emplace(e->to);  // I accept leaving the old entry buried in the heap, 
+				}
+			}
+		}
+		graph r(t);
+		for (auto& i:vdm) {
+			if (i.second.src==-1) continue;
+			r.add(i.second.src,i.first,get_edata(get_edid(i.second.src,i.first)));
+		}
+		return move(pair<graph,typename spt::vertex_data>(move(r),move(vdm)));
+
+	}
+
+	pair<graph,typename spt::vertex_data> spt_dijkstra(int start, int end=-1) const { //shortest_path_tree
+		//http://www.geeksforgeeks.org/greedy-algorithms-set-6-dijkstras-shortest-path-algorithm/
+		return move(spt_Astar([](const vertex*) -> Edata {return Edata();}, start, end));
+/*
+		vertex_data vdm;
+
+		auto cmp=[&vdm](const vertex* v1, const vertex* v2)-> bool {
+			return vdm.find(v2)->second.cost < vdm.find(v1)->second.cost;
+		}; 
+		priority_queue<const vertex*,vector<const vertex*>, decltype(cmp)> q(cmp);
+
+		const vertex* v=get_vertex(start);
+		vdm.emplace(v,vd());
+		q.emplace(v);
+
+		while(!q.empty()) {
+			const vertex* v=q.top(); q.pop();
+			if (v->id==end) break;
+			const vd& w0=vdm.find(v)->second;
+
+			for (auto& e:v->e) {
+				auto i=vdm.find(e->to);
+				if (i==vdm.end()) {
+					i=vdm.emplace(e->to,vd(e->from,w0.cost+get_edata(*e))).first;
+					q.emplace(e->to);
+					continue;
+				}
+				auto cost=w0.cost+get_edata(*e);
+				if (cost<i->second.cost)  {
+					i->second.cost=cost;
+					i->second.src=v;
+					q.emplace(e->to);  // I accept leaving the old entry buried in the heap, 
+				}
+			}
+		}
+		graph r(t);
+		for (auto& i:vdm) {
+			if (i.second.src==0) continue;
+			r.add(i.second.src->id,i.first->id,get_edata(get_edid(i.second.src->id,i.first->id)));
+		}
+		return move(pair<graph,vertex_data>(move(r),move(vdm)));
+*/
 	}
 
 	const Edata& get_edata(const edge& e) const {
