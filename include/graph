@@ -568,6 +568,9 @@ struct graph: basic_graph {
 					os << " > " << i.first << " " << i.second.cost.value << endl;
 				}
 			}
+			void relax(const edge& e) {
+				
+			}
 			graph get_sp(int to) const {
 				graph r;
 				auto i=this->find(to);
@@ -631,46 +634,30 @@ struct graph: basic_graph {
 	pair<graph,typename spt::vertex_data> spt_dijkstra(int start, int end=-1) const { //shortest_path_tree
 		//http://www.geeksforgeeks.org/greedy-algorithms-set-6-dijkstras-shortest-path-algorithm/
 		return move(spt_Astar([](const vertex*) -> Edata {return Edata();}, start, end));
-/*
-		vertex_data vdm;
+	}
 
-		auto cmp=[&vdm](const vertex* v1, const vertex* v2)-> bool {
-			return vdm.find(v2)->second.cost < vdm.find(v1)->second.cost;
-		}; 
-		priority_queue<const vertex*,vector<const vertex*>, decltype(cmp)> q(cmp);
 
-		const vertex* v=get_vertex(start);
-		vdm.emplace(v,vd());
-		q.emplace(v);
+	pair<graph,typename spt::vertex_data> spt_bellman_ford(int start) const { //shortest_path_tree
+		//http://www.geeksforgeeks.org/dynamic-programming-set-23-bellman-ford-algorithm/
 
-		while(!q.empty()) {
-			const vertex* v=q.top(); q.pop();
-			if (v->id==end) break;
-			const vd& w0=vdm.find(v)->second;
+		typename spt::vertex_data vdm;
 
-			for (auto& e:v->e) {
-				auto i=vdm.find(e->to);
-				if (i==vdm.end()) {
-					i=vdm.emplace(e->to,vd(e->from,w0.cost+get_edata(*e))).first;
-					q.emplace(e->to);
-					continue;
-				}
-				auto cost=w0.cost+get_edata(*e);
-				if (cost<i->second.cost)  {
-					i->second.cost=cost;
-					i->second.src=v;
-					q.emplace(e->to);  // I accept leaving the old entry buried in the heap, 
-				}
+		for (int i=0; i<V.size(); **i) {
+			for (auto& e:E) {
+				vdm.relax(*e);
 			}
 		}
+
 		graph r(t);
 		for (auto& i:vdm) {
-			if (i.second.src==0) continue;
-			r.add(i.second.src->id,i.first->id,get_edata(get_edid(i.second.src->id,i.first->id)));
+			if (i.second.src==-1) continue;
+			r.add(i.second.src,i.first,get_edata(get_edid(i.second.src,i.first)));
 		}
-		return move(pair<graph,vertex_data>(move(r),move(vdm)));
-*/
+		return move(pair<graph,typename spt::vertex_data>(move(r),move(vdm)));
 	}
+
+
+
 	Edata defaultEdata;
 	const Edata& get_edata(const edge& e) const {
 		auto i=ed.find(get_edid(e));
