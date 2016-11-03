@@ -1,3 +1,6 @@
+bigint_example:
+	g++ -O0 -g -std=c++14 bigint.cpp -o bigint_example
+
 graph_example: graph.cpp ../include/graph
 	g++ -O0 -g -std=c++14 graph.cpp -o graph_example
 

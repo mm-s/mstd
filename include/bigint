@@ -1,10 +1,13 @@
 #ifndef _MSTD_BIGINT
 #define _MSTD_BIGINT
+
+#include <bitset>
+
 namespace mstd {
 using namespace std;
 
 template<int N>
-class bigint: bitset<N> {
+class bigint: public bitset<N> {
 	typedef bitset<N> base;
 public:
 	template<typename T>
@@ -17,21 +20,33 @@ public:
 template<int N>
 bigint<N> operator+(const bigint<N>& a, const bigint<N>& b) {
 		bigint<N> carry=a;
-		a&=b;
+		carry&=b;
 		bigint<N> result=a;
-		a^=b;
+		result^=b;
 		while(carry.any()) {
 		        bigint<N> shiftedcarry = carry << 1;
 		        carry = result & shiftedcarry;
 		        result ^= shiftedcarry;
 		}
 		return result;
-    }		
-		
 }
 
 
-
+template<int N>
+ostream& operator << (ostream& os, const bigint<N>&) {
+	int 	
 }
+
+/*
+template<int N>
+bigint<N> operator*(const bigint<N>& a, const bigint<N>& b) {
+	
+	
+}
+*/
+
+
+
+
 #endif
 
