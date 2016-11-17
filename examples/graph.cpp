@@ -128,9 +128,9 @@ int main() {
 	g.dot(f);
 	}
 
-	struct vis:basic_graph::visitor {
-		void start(const vertex&) override {};
-		void visit(const edge& e) override {
+	struct vis:basic_graph<int>::visitor {
+		void start(const vertex<int>&) override {};
+		void visit(const edge<int>& e) override {
 			cout << "   " << (e.from!=0?e.from->id:-1) << " -> " << e.to->id << endl;
 		}
 		void finished() override {};
@@ -141,7 +141,7 @@ int main() {
 	g.breath_first(1,vis_);
 	cout << "depth first traversal" << endl;
 	g.depth_first(1,vis_);
-
+/*
 	cout << "best path" << endl;
 	vector<string> distances;
 	distances.push_back("1 2 1");
@@ -179,7 +179,7 @@ int main() {
 	auto r=bp.compute(1,2,pathfinder::depth_first);
 	r.dump(cout);
 	}
-
+*/
 
 	return 0;
 }

@@ -22,23 +22,39 @@ namespace mstd {
 
 using namespace std;
 
-struct edge;
 
-struct edge;
+  struct pairhash {
+  public:
+    template <typename T, typename U>
+    std::size_t operator()(const std::pair<T, U> &x) const {
+          //http://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes
+          //return std::hash<T>()(x.first) ^ std::hash<U>()(x.second);
+          auto lhs=hash<T>()(x.first);
+          auto rhs=hash<U>()(x.second);
+          lhs^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
+          return lhs;
+    }
+  };
 
+
+template<typename T> struct edge;
+
+
+template<typename T>
 struct vertex {
-	vertex(int id_): id(id_) {
+	vertex(T id_): id(id_) {
 	}
 	bool is_leaf() const { return e.empty(); }
-	set<edge*> e;
+	set<edge<T>*> e;
 
-	const edge* get_edge_to(int to) const;
+	const edge<T>* get_edge_to(T to) const;
 
-	int id;
+	T id;
 };
 
+template<typename T>
 struct edge {  //from, to
-	edge(vertex* f, const vertex* t): from(f), to(t) {
+	edge(vertex<T>* f, const vertex<T>* t): from(f), to(t) {
 		from->e.emplace(this);
 
 	}
@@ -48,18 +64,21 @@ struct edge {  //from, to
 	const edge* get_reverse() const {
 		return to->get_edge_to(from->id);
 	}
-	vertex* from;
-	const vertex* to;
+	vertex<T>* from;
+	const vertex<T>* to;
 };
 
 
-const edge* vertex::get_edge_to(int to) const {
+template<typename T>
+const edge<T>* vertex<T>::get_edge_to(T to) const {
 	for (const auto& i: e) if (i->to->id==to) return i;
 	return 0;
 }
 
+template<typename T>
 struct basic_graph {
-	typedef pair<int,int> edid;
+	typedef T vtype;
+	typedef pair<T,T> edid;
 	enum type {
 		directed, undirected
 	};
@@ -69,8 +88,8 @@ struct basic_graph {
 
 	basic_graph(const vector<string>& al, type t=directed): t(t) {  //v1 v2
 		for (auto& l:al) {
-			int v1=-1;
-			int v2=-1;
+			T v1;
+			T v2;
 			istringstream is(l);
 			is >> v1;
 			is >> v2;
@@ -89,7 +108,7 @@ struct basic_graph {
 	}
 
 	template<class P>
-	void make_dot(const P& pred, const function<bool(const vertex&)>& is_leaf, const function<bool(const vertex&)>& is_done, const function<string(const edge&)>& label_edge, bool invert, ostream& os) const {
+	void make_dot(const P& pred, const function<bool(const vertex<T>&)>& is_leaf, const function<bool(const vertex<T>&)>& is_done, const function<string(const edge<T>&)>& label_edge, bool invert, ostream& os) const {
 		os << "digraph {" << endl;
 		os << "node [shape=oval,style=filled]" << endl;
 		if (t==undirected) {
@@ -114,7 +133,7 @@ struct basic_graph {
 			}
 			os << "];" << endl;
 		}
-		set<pair<int,int>> u;
+		set<pair<T,T>> u;
 		for (auto e: E) {
 			if (t==undirected) {
 				edid f=e.first;
@@ -145,23 +164,23 @@ struct basic_graph {
 
 	virtual void dot(ostream& os) const {
 		make_dot(
-		[](int i) -> string { return ""; },
-		[](const vertex&v) -> bool { return v.is_leaf(); },
-		[](const vertex&) -> bool { return false; },
-		[](const edge&) -> string { return ""; },
+		[](T i) -> string { return ""; },
+		[](const vertex<T>&v) -> bool { return v.is_leaf(); },
+		[](const vertex<T>&) -> bool { return false; },
+		[](const edge<T>&) -> string { return ""; },
 		false,
 		os);
 	}	
 
-	vertex* get_vertex(int iv) {
+	vertex<T>* get_vertex(T iv) {
 		auto i=V.find(iv);
 		if (i==V.end()) {
-			V.emplace(iv,new vertex(iv));
+			V.emplace(iv,new vertex<T>(iv));
 			i=V.find(iv);
 		}
 		return i->second;
 	}
-	const vertex* get_vertex(int iv) const {
+	const vertex<T>* get_vertex(T iv) const {
 		auto i=V.find(iv);
 		if (i==V.end()) {
 			return 0;
@@ -169,31 +188,31 @@ struct basic_graph {
 		return i->second;
 	}
 
-	edid get_eid(int iv1, int iv2) const {
+	edid get_eid(T iv1, T iv2) const {
 		return move(make_pair(iv1,iv2));
 	}
-	edid get_eid(const edge& e) const {
+	edid get_eid(const edge<T>& e) const {
 		return move(make_pair(e.from->id,e.to->id));
 	}
-	edid get_erid(const edge& e) const {
+	edid get_erid(const edge<T>& e) const {
 		return move(make_pair(e.to->id,e.from->id));
 	}
 
-	virtual edge* add(int iv1, int iv2) {
-		if (iv1<0 || iv2<0) return 0;
+	virtual edge<T>* add(T iv1, T iv2) {
+//		if (iv1<0 || iv2<0) return 0;
 		if (iv1==iv2) return 0;
 		auto v1=get_vertex(iv1);
 		auto v2=get_vertex(iv2);
-		edge* e=new edge(v1,v2);
+		edge<T>* e=new edge<T>(v1,v2);
 		E.emplace(get_eid(iv1,iv2),e);
 		if (t==undirected) {
-			edge* e=new edge(v2,v1);
+			edge<T>* e=new edge<T>(v2,v1);
 			E.emplace(get_eid(iv2,iv1),e);
 		}
 		return e;
 	}
 
-	virtual void erase(edge* e) {
+	virtual void erase(edge<T>* e) {
 		auto eid=get_eid(*e);
 		if (t==undirected) {
 			auto i=E.find(get_erid(*e));
@@ -213,28 +232,28 @@ struct basic_graph {
 	}
 
 	struct visitor {
-		virtual void start(const vertex&){};
-		virtual void visit(const edge&){};
-		virtual void visit(const vertex&){};
+		virtual void start(const vertex<T>&){};
+		virtual void visit(const edge<T>&){};
+		virtual void visit(const vertex<T>&){};
 		virtual void finished(){};
 		bool finish{false};
 	};
-	void breath_first(int iv, visitor& visitor_) const {
+	void breath_first(T iv, visitor& visitor_) const {
 		auto v=V.find(iv);
 		if (v==V.end()) return;
 		breath_first(*v->second,visitor_);
 	}
 
-	void breath_first(const vertex& s, visitor& visitor_) const {
+	void breath_first(const vertex<T>& s, visitor& visitor_) const {
 		visitor_.start(s);
 		visitor_.visit(s);
-		unordered_set<const edge*> visited;
-		queue<edge*> q;
+		unordered_set<const edge<T>*> visited;
+		queue<edge<T>*> q;
 		for (auto e:s.e) {
 			q.push(e);
 		}
 		while(!q.empty() && !visitor_.finish) {
-			edge* e=q.front(); q.pop();
+			edge<T>* e=q.front(); q.pop();
 			if (visited.find(e)==visited.end()) {		
 //				cout << e->to->id << endl;
 				for (auto ed:e->to->e) {
@@ -245,7 +264,7 @@ struct basic_graph {
 				visitor_.visit(*e->to);
 				visited.emplace(e);
 				if (t==undirected) {
-					const edge* redge=e->get_reverse();
+					const edge<T>* redge=e->get_reverse();
 					assert(redge!=0);
 					visited.emplace(redge);
 				}
@@ -254,23 +273,23 @@ struct basic_graph {
 		visitor_.finished();
 	}
 
-	void depth_first(int iv, visitor& visitor_) const {
+	void depth_first(T iv, visitor& visitor_) const {
 		auto v=V.find(iv);
 		if (v==V.end()) return;
 		depth_first(*v->second,visitor_);
 	}
 
-	void depth_first(const vertex& s, visitor& visitor_) const {
+	void depth_first(const vertex<T>& s, visitor& visitor_) const {
 		visitor_.start(s);
 		visitor_.visit(s);
-		unordered_set<const edge*> visited;
+		unordered_set<const edge<T>*> visited;
 
-		stack<edge*> q;
+		stack<edge<T>*> q;
 		for (auto e:s.e) {
 			q.push(e);
 		}
 		while(!q.empty() && !visitor_.finish) {
-			edge* e=q.top(); q.pop();
+			edge<T>* e=q.top(); q.pop();
 			if (visited.find(e)==visited.end()) {		
 				for (auto ed:e->to->e) {
 					q.push(ed);
@@ -279,7 +298,7 @@ struct basic_graph {
 				visitor_.visit(*e->to);
 				visited.emplace(e);
 				if (t==undirected) {
-					const edge* redge=e->get_reverse();
+					const edge<T>* redge=e->get_reverse();
 					assert(redge!=0);
 					visited.emplace(redge);
 				}
@@ -291,20 +310,20 @@ struct basic_graph {
 	int vertexes_size() const { return V.size(); }
 	int edges_size() const { return t==directed?E.size():E.size()/2; }
 
-	bool cycle(const edge& start) const {
-		struct vis: visitor {
-			vis(const edge& start): start(start) {
+	bool cycle(const edge<T>& start) const {
+		struct cycle_visitor: visitor {
+			cycle_visitor(const edge<T>& start): start(start) {
 			}
-			virtual void visit(const edge& e) {
+			virtual void visit(const edge<T>& e) override {
 				if (e.to->id==start.from->id) {
 					cycle=true;
-					finish=true;
-  				}
+					visitor::finish=true;
+				}
 			}
-			const edge& start;
+			const edge<T>& start;
 			bool cycle{false};
 		};
-		vis v(start);
+		cycle_visitor v(start);
 		depth_first(*start.from,v);
 		return v.cycle;
 	}
@@ -315,27 +334,15 @@ struct basic_graph {
 			v.second->e.clear();
 		}
 		for (auto& e:E) {
-			swap(e.second->from,const_cast<vertex*&>(e.second->to));
+			swap(e.second->from,const_cast<vertex<T>*&>(e.second->to));
 			V.find(e.second->from->id)->second->e.emplace(e.second);
 		}
 	}
 
-	struct pairhash {
-	public:
-	  template <typename T, typename U>
-	  std::size_t operator()(const std::pair<T, U> &x) const {
-		//http://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes
-		//return std::hash<T>()(x.first) ^ std::hash<U>()(x.second);
-		auto lhs=hash<T>()(x.first);
-		auto rhs=hash<U>()(x.second);
-		lhs^= rhs + 0x9e3779b9 + (lhs << 6) + (lhs >> 2);
-		return lhs;
-	  }
-	};
 
 
-	unordered_map<int,vertex*> V;
-	unordered_map<edid,edge*, pairhash> E;
+	unordered_map<T,vertex<T>*> V;
+	unordered_map<edid,edge<T>*, pairhash> E;
 	type t;
 
 	
@@ -387,19 +394,22 @@ ostream& operator << (ostream& os, const scalar<T>& v) {
 	return os;
 }
 
-template<typename Edata=scalar<int>>
-struct graph: basic_graph {
-	typedef basic_graph base;
+template<typename T=int, typename Edata=scalar<int>>
+struct graph: basic_graph<T> {
+        typedef basic_graph<T> base;
+        using type=typename base::type;
+        using edid=typename base::edid;
+        using vtype=typename base::vtype;
 
-	graph(type t=directed): base(t) {
+	graph(type t=base::directed): base(t) {
 	}
-	graph(const vector<edid>& al, type t=directed): base(al,t) {  //v1 v2
+	graph(const vector<edid>& al, type t=base::directed): base(al,t) {  //v1 v2
 	}
 
-	graph(const vector<string>& al_values, type t=directed): base(t) {  //v1 v2
+	graph(const vector<string>& al_values, type t=base::directed): base(t) {  //v1 v2
 		for (auto& l:al_values) {
-			int v1=-1;
-			int v2=-1;
+			vtype v1;
+			vtype v2;
 			istringstream is(l);
 			is >> v1;
 			is >> v2;
@@ -411,7 +421,7 @@ struct graph: basic_graph {
 	}
 
 	graph(const graph&)=delete;
-	graph(graph&& other): ed(move(other.ed)), basic_graph(move(other)) {
+	graph(graph&& other): ed(move(other.ed)), base(move(other)) {
 	}
 
 	virtual ~graph() {
@@ -420,9 +430,9 @@ struct graph: basic_graph {
 	virtual void dot(ostream& os) const {
 		base::make_dot(
 		[](int i) -> string { return ""; },
-		[](const vertex&v) -> bool { return v.is_leaf(); },
-		[](const vertex&) -> bool { return false; },
-		[&](const edge& e) -> string { 
+		[](const vertex<vtype>&v) -> bool { return v.is_leaf(); },
+		[](const vertex<vtype>&) -> bool { return false; },
+		[&](const edge<vtype>& e) -> string {
 			ostringstream os;
 			os << ed.find(get_edid(e))->second;
 			return os.str();
@@ -432,28 +442,28 @@ struct graph: basic_graph {
 	}	
 
 
-	edid get_edid(const edge& e) const {
+	edid get_edid(const edge<vtype>& e) const {
 		return get_edid(e.from->id,e.to->id);
 	}
 
-	edid get_edid(int iv1, int iv2) const {
-		if (t==undirected && iv1>iv2) {
+	edid get_edid(vtype iv1, vtype iv2) const {
+		if (base::t==base::undirected && iv1>iv2) {
 			return get_edid(iv2,iv1);
 		}
 		return move(make_pair(iv1,iv2));
 	}
 
-	virtual edge* add(int iv1, int iv2) {
+	virtual edge<vtype>* add(vtype iv1, vtype iv2) {
 		base::add(iv1,iv2);
 	}
 
-	edge* add(int iv1, int iv2, const Edata& d) {
-		edge* e=base::add(iv1,iv2);
+	edge<vtype>* add(int iv1, int iv2, const Edata& d) {
+		edge<vtype>* e=base::add(iv1,iv2);
 		ed.emplace(get_edid(iv1,iv2),d);
 		return e;
 	}
-	edge* add(int iv1, int iv2, Edata&& d) {
-		edge* e=base::add(iv1,iv2);
+	edge<vtype>* add(vtype iv1, vtype iv2, Edata&& d) {
+		edge<vtype>* e=base::add(iv1,iv2);
 		ed.emplace(get_edid(iv1,iv2),move(d));
 		return e;
 	}
@@ -469,7 +479,7 @@ struct graph: basic_graph {
 		return move(v);
 	}
 
-	virtual void erase(edge* e) {
+	virtual void erase(edge<vtype>* e) {
 		auto i=ed.find(get_edid(*e));
 		if (i!=ed.end()) ed.erase(i);
 		base::erase(e);
@@ -478,16 +488,16 @@ struct graph: basic_graph {
 	graph mst_prim() const { // minimum_spanning_tree - greedy. 
 		//http://www.geeksforgeeks.org/greedy-algorithms-set-5-prims-minimum-spanning-tree-mst-2/
 
-		typedef multimap<Edata,const edge*> master_t;
-		typedef map<const vertex*,typename master_t::const_iterator> index_t;
+		typedef multimap<Edata,const edge<vtype>*> master_t;
+		typedef map<const vertex<vtype>*,typename master_t::const_iterator> index_t;
 
 		master_t master;
 		index_t index;
 
-		graph g(t);
-		if (V.empty()) return move(g);
+		graph g(base::t);
+		if (base::V.empty()) return move(g);
 
-		const vertex* v=V.cbegin()->second; //pick vertex with minimum key value
+		const vertex<vtype>* v=base::V.cbegin()->second; //pick vertex with minimum key value
 
 		while(true) {
 
@@ -506,7 +516,7 @@ struct graph: basic_graph {
 			}				
 			if (master.empty()) break;
 
-			const edge* e=master.cbegin()->second; //pick vertex with minimum key value
+			const edge<vtype>* e=master.cbegin()->second; //pick vertex with minimum key value
 			index.erase(e->to);
 			master.erase(master.begin());
 			v=e->to;
@@ -520,32 +530,32 @@ struct graph: basic_graph {
 
 	graph mst_kruskal() const { // minimum_spanning_tree - greedy. 
 		//http://www.geeksforgeeks.org/greedy-algorithms-set-2-kruskals-minimum-spanning-tree-mst/
-		graph r(t);
+		graph r(base::t);
 		vector<edid> edges=sort_edges_no_descendent();
 		for (const auto& e: edges) {
-			edge* ne=r.add(e.first,e.second);
+			edge<vtype>* ne=r.add(e.first,e.second);
 			if (r.cycle(*ne)) {
 				r.erase(ne);
 			}
 			else {
 				r.ed.emplace(e,get_edata(e)); //add the weight
-				if (r.edges_size()==vertexes_size()-1) break;
+				if (r.edges_size()==base::vertexes_size()-1) break;
 			}
 		}
 		return move(r);
 	}
 	
 	Edata sum_data() const {
-		struct vis: visitor {
+		struct vis: base::visitor {
 			vis(const graph& g): g(g) {}
 			Edata d;
 			const graph& g;
-			virtual void visit(const edge& e) {
+			virtual void visit(const edge<vtype>& e) {
 				d+=g.get_edata(e);
 			}
 		};
 		vis v(*this);
-		depth_first(*V.cbegin()->second,v);
+		base::depth_first(*base::V.cbegin()->second,v);
 		return v.d;
 	}
 
@@ -555,11 +565,11 @@ struct graph: basic_graph {
 			vd() {}
 			vd(vd&& other): src(other.src), cost(move(other.cost)) {}
 			vd(int src, const Edata&d): src(src), cost(d) { }
-			int src{-1};
+			vtype src{-1};
 			Edata cost;
 		};
-		struct vertex_data: unordered_map<int, vd> {
-			typedef unordered_map<int, vd> base;
+		struct vertex_data: unordered_map<vtype, vd> {
+			typedef unordered_map<vtype, vd> base;
 			vertex_data(){}
 			vertex_data(vertex_data&&other): base(move(other)) {}
 			void dump(ostream& os) const {
@@ -568,15 +578,15 @@ struct graph: basic_graph {
 					os << " > " << i.first << " " << i.second.cost.value << endl;
 				}
 			}
-			void relax(const edge& e) {
+			void relax(const edge<vtype>& e) {
 				
 			}
-			graph get_sp(int to) const {
+			graph get_sp(vtype to) const {
 				graph r;
 				auto i=this->find(to);
 				if (i==this->end()) return move(r);
-				int cur=to;
-				int prev=i->second.src;
+				vtype cur=to;
+				vtype prev=i->second.src;
 				while(prev!=-1) {
 					auto p=this->find(prev);
 					assert(p!=this->end());
@@ -589,21 +599,21 @@ struct graph: basic_graph {
 			}
 		};
 	};
-	pair<graph,typename spt::vertex_data> spt_Astar(const function<Edata(const vertex*)>& heur, int start, int end=-1) const { //shortest_path_tree
+	pair<graph,typename spt::vertex_data> spt_Astar(const function<Edata(const vertex<vtype>*)>& heur, vtype start, vtype end=-1) const { //shortest_path_tree
 		//http://www.geeksforgeeks.org/a-search-algorithm/
 
 		typename spt::vertex_data vdm;
 
-		auto cmp=[&vdm, &heur](const vertex* v1, const vertex* v2)-> bool {
+		auto cmp=[&vdm, &heur](const vertex<vtype>* v1, const vertex<vtype>* v2)-> bool {
 			return (vdm.find(v2->id)->second.cost+heur(v2)) < (vdm.find(v1->id)->second.cost+heur(v1));
 		}; 
-		priority_queue<const vertex*,vector<const vertex*>, decltype(cmp)> q(cmp);
+		priority_queue<const vertex<vtype>*,vector<const vertex<vtype>*>, decltype(cmp)> q(cmp);
 
-		const vertex* v=get_vertex(start);
+		const vertex<vtype>* v=base::get_vertex(start);
 		vdm.emplace(v->id,typename spt::vd());
 		q.emplace(v);
 		while(!q.empty()) {
-			const vertex* v=q.top(); q.pop();
+			const vertex<vtype>* v=q.top(); q.pop();
 			if (v->id==end) break;
 			const typename spt::vd& w0=vdm.find(v->id)->second;
 
@@ -622,7 +632,7 @@ struct graph: basic_graph {
 				}
 			}
 		}
-		graph r(t);
+		graph r(base::t);
 		for (auto& i:vdm) {
 			if (i.second.src==-1) continue;
 			r.add(i.second.src,i.first,get_edata(get_edid(i.second.src,i.first)));
@@ -631,12 +641,12 @@ struct graph: basic_graph {
 
 	}
 
-	pair<graph,typename spt::vertex_data> spt_dijkstra(int start, int end=-1) const { //shortest_path_tree
+	pair<graph,typename spt::vertex_data> spt_dijkstra(vtype start, vtype end=-1) const { //shortest_path_tree
 		//http://www.geeksforgeeks.org/greedy-algorithms-set-6-dijkstras-shortest-path-algorithm/
-		return move(spt_Astar([](const vertex*) -> Edata {return Edata();}, start, end));
+		return move(spt_Astar([](const vertex<vtype>*) -> Edata {return Edata();}, start, end));
 	}
 
-
+/*
 	pair<graph,typename spt::vertex_data> spt_bellman_ford(int start) const { //shortest_path_tree
 		//http://www.geeksforgeeks.org/dynamic-programming-set-23-bellman-ford-algorithm/
 
@@ -655,11 +665,11 @@ struct graph: basic_graph {
 		}
 		return move(pair<graph,typename spt::vertex_data>(move(r),move(vdm)));
 	}
-
+*/
 
 
 	Edata defaultEdata;
-	const Edata& get_edata(const edge& e) const {
+	const Edata& get_edata(const edge<vtype>& e) const {
 		auto i=ed.find(get_edid(e));
 		if (i==ed.end()) return defaultEdata;
 		return i->second;
@@ -672,7 +682,7 @@ struct graph: basic_graph {
 
 	virtual void reverse() {
 		base::reverse();
-		if (t==undirected) return;
+		if (base::t==base::undirected) return;
 		unordered_map<edid,Edata,pairhash> m;
 		for (auto& i:ed) {
 			m.emplace(edid(i.first.second,i.first.first),move(i.second));
@@ -683,7 +693,7 @@ struct graph: basic_graph {
 	unordered_map<edid,Edata,pairhash> ed;
 };
 
-
+/*
 struct Vdata {
 	Vdata():score(numeric_limits<int>::max()) {}
 	Vdata(int v):score(v) {}
@@ -845,7 +855,7 @@ struct best_path:basic_graph::visitor {
 
 
 };
-
+*/
 
 
 }
